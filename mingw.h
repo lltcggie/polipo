@@ -165,6 +165,10 @@ int     win32_shutdown(SOCKET, int);
 int     win32_getpeername(SOCKET, struct sockaddr*, socklen_t *);
 int     win32_snprintf(char* dest, size_t count, const char* format, ...);
 
+#define SOCKET_TYPE SOCKET
+#define IS_SOCK_INVALID(x) ((x) == INVALID_SOCKET)
+#define SOCK_INVALID_VALUE INVALID_SOCKET
+
 /* Three socket specific macros */
 #define READ(x, y, z)  win32_read_socket(x, y, z)
 #define WRITE(x, y, z) win32_write_socket(x, y, z)
@@ -190,6 +194,6 @@ struct iovec {
 };
 #define WRITEV(x, y, z) polipo_writev(x, y, z)
 #define READV(x, y, z)  polipo_readv(x, y, z)
-int polipo_readv(int fd, const struct iovec *vector, int count);
-int polipo_writev(int fd, const struct iovec *vector, int count);
+int polipo_readv(SOCKET_TYPE fd, const struct iovec *vector, int count);
+int polipo_writev(SOCKET_TYPE fd, const struct iovec *vector, int count);
 #endif

@@ -25,7 +25,7 @@ extern AtomPtr socksParentProxy;
 typedef struct _SocksRequest {
     AtomPtr name;
     int port;
-    int fd;
+    SOCKET_TYPE fd;
     int (*handler)(int, struct _SocksRequest*);
     char *buf;
     void *data;

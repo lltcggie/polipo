@@ -66,8 +66,8 @@ initIo()
 }
 
 FdEventHandlerPtr
-do_stream(int operation, int fd, int offset, char *buf, int len,
-          int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+do_stream(int operation, SOCKET_TYPE fd, int offset, char *buf, int len,
+          int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
           void *data)
 {
     assert(len > offset || (operation & (IO_END | IO_IMMEDIATE)));
@@ -77,9 +77,9 @@ do_stream(int operation, int fd, int offset, char *buf, int len,
 }
 
 FdEventHandlerPtr
-do_stream_2(int operation, int fd, int offset, 
+do_stream_2(int operation, SOCKET_TYPE fd, int offset,
             char *buf, int len, char *buf2, int len2,
-            int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+            int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
             void *data)
 {
     assert(len + len2 > offset || (operation & (IO_END | IO_IMMEDIATE)));
@@ -89,9 +89,9 @@ do_stream_2(int operation, int fd, int offset,
 }
 
 FdEventHandlerPtr
-do_stream_3(int operation, int fd, int offset, 
+do_stream_3(int operation, SOCKET_TYPE fd, int offset,
             char *buf, int len, char *buf2, int len2, char *buf3, int len3,
-            int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+            int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
             void *data)
 {
     assert(len + len2 > offset || (operation & (IO_END | IO_IMMEDIATE)));
@@ -101,9 +101,9 @@ do_stream_3(int operation, int fd, int offset,
 }
 
 FdEventHandlerPtr
-do_stream_h(int operation, int fd, int offset,
+do_stream_h(int operation, SOCKET_TYPE fd, int offset,
             char *header, int hlen, char *buf, int len,
-            int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+            int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
             void *data)
 {
     assert(hlen + len > offset || (operation & (IO_END | IO_IMMEDIATE)));
@@ -113,8 +113,8 @@ do_stream_h(int operation, int fd, int offset,
 }
 
 FdEventHandlerPtr
-do_stream_buf(int operation, int fd, int offset, char **buf_location, int len,
-              int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+do_stream_buf(int operation, SOCKET_TYPE fd, int offset, char **buf_location, int len,
+              int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
               void *data)
 {
     assert((len > offset || (operation & (IO_END | IO_IMMEDIATE)))
@@ -154,11 +154,11 @@ chunkHeader(char *buf, int buflen, int i)
 
 
 FdEventHandlerPtr
-schedule_stream(int operation, int fd, int offset,
+schedule_stream(int operation, SOCKET_TYPE fd, int offset,
                 char *header, int hlen,
                 char *buf, int len, char *buf2, int len2, char *buf3, int len3,
                 char **buf_location,
-                int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+                int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
                 void *data)
 {
     StreamRequestRec request;
@@ -201,7 +201,7 @@ schedule_stream(int operation, int fd, int offset,
                         do_scheduled_stream, 
                         sizeof(StreamRequestRec), &request);
     if(!event) {
-        done = (*handler)(-ENOMEM, NULL, &request);
+        done = (*handler)(SOCK_INVALID_VALUE, -ENOMEM, NULL, &request);
         assert(done);
         return NULL;
     }
@@ -216,7 +216,7 @@ schedule_stream(int operation, int fd, int offset,
 
     if(operation & IO_IMMEDIATE) {
         assert(hlen == 0 && !(operation & IO_CHUNKED));
-        done = (*handler)(0, event, &request);
+        done = (*handler)(0, 0, event, &request);
         if(done) {
             free(event);
             return NULL;
@@ -242,7 +242,7 @@ do_scheduled_stream(int status, FdEventHandlerPtr event)
         ((request->operation & IO_BUF3) ? request->u.b.len3 : 0);
 
     if(status) {
-        done = request->handler(status, event, request);
+        done = request->handler(status, 0, event, request);
         return done;
     }
 
@@ -284,7 +284,7 @@ do_scheduled_stream(int status, FdEventHandlerPtr event)
             assert(*request->u.l.buf_location == NULL);
             request->buf = *request->u.l.buf_location = get_chunk();
             if(request->buf == NULL) {
-                done = request->handler(-ENOMEM, event, request);
+                done = request->handler(SOCK_INVALID_VALUE, -ENOMEM, event, request);
                 return done;
             }
         }
@@ -357,27 +357,27 @@ do_scheduled_stream(int status, FdEventHandlerPtr event)
         if(i > 1) 
             rc = WRITEV(request->fd, iov, i);
         else
-            rc = WRITE(request->fd, iov[0].iov_base, iov[0].iov_len);
+            rc = WRITE(request->fd, iov[0].iov_base, (int)iov[0].iov_len);
     } else {
         if(i > 1) 
             rc = READV(request->fd, iov, i);
         else
-            rc = READ(request->fd, iov[0].iov_base, iov[0].iov_len);
+            rc = READ(request->fd, iov[0].iov_base, (int)iov[0].iov_len);
     }
 
     if(rc > 0) {
         request->offset += rc;
         if(request->offset < 0) return 0;
-        done = request->handler(0, event, request);
+        done = request->handler(0, 0, event, request);
         return done;
     } else if(rc == 0 || errno == EPIPE) {
-        done = request->handler(1, event, request);
+        done = request->handler(1, 0, event, request);
     } else if(errno == EAGAIN || errno == EINTR) {
         return 0;
     } else if(errno == EFAULT || errno == EBADF) {
         abort();
     } else {
-        done = request->handler(-errno, event, request);
+        done = request->handler(SOCK_INVALID_VALUE, -errno, event, request);
     }
     assert(done);
     return done;
@@ -408,7 +408,7 @@ streamRequestDone(StreamRequestPtr request)
 }
 
 static int
-serverSocket_outgoingIP(int fd)
+serverSocket_outgoingIP(SOCKET_TYPE fd)
 {
         int rc;
         unsigned long int bind_addr_saddr = inet_addr (proxyOutgoingAddress->string);
@@ -426,24 +426,25 @@ serverSocket_outgoingIP(int fd)
         return rc;
 }
 
-static int
+static SOCKET_TYPE
 serverSocket(int af)
 {
-    int fd, rc;
+	SOCKET_TYPE fd;
+	int rc;
     if(af == 4) {
         fd = socket(PF_INET, SOCK_STREAM, 0);
     } else if(af == 6) {
 #ifdef HAVE_IPv6
         fd = socket(PF_INET6, SOCK_STREAM, 0);
 #else
-        fd = -1;
+        fd = SOCK_INVALID_VALUE;
         errno = EAFNOSUPPORT;
 #endif
     } else {
         abort();
     }
 
-    if(fd >= 0) {
+    if(!IS_SOCK_INVALID(fd)) {
         if(proxyOutgoingAddress != NULL) {
             serverSocket_outgoingIP(fd);
         }
@@ -473,13 +474,14 @@ serverSocket(int af)
 }
 
 FdEventHandlerPtr
-do_connect(AtomPtr addr, int index, int port,
-           int (*handler)(int, FdEventHandlerPtr, ConnectRequestPtr),
+do_connect(struct _Atom *addr, int index, int port,
+           int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, ConnectRequestPtr),
            void *data)
 {
     ConnectRequestRec request;
     FdEventHandlerPtr event;
-    int done, fd, af;
+    int done, af;
+	SOCKET_TYPE fd;
 
     assert(addr->length > 0 && addr->string[0] == DNS_A);
     assert(addr->length % sizeof(HostAddressRec) == 1);
@@ -500,7 +502,7 @@ do_connect(AtomPtr addr, int index, int port,
     request.addr = addr;
     request.index = index;
 
-    if(fd < 0) {
+    if(IS_SOCK_INVALID(fd)) {
         int n = (addr->length - 1) / sizeof(HostAddressRec);
         if(errno == EAFNOSUPPORT || errno == EPROTONOSUPPORT) {
             if((index + 1) % n != request.firstindex) {
@@ -509,7 +511,7 @@ do_connect(AtomPtr addr, int index, int port,
             }
         }
         do_log_error(L_ERROR, errno, "Couldn't create socket");
-        done = (*handler)(-errno, NULL, &request);
+        done = (*handler)(SOCK_INVALID_VALUE, -errno, NULL, &request);
         assert(done);
         return NULL;
     }
@@ -519,7 +521,7 @@ do_connect(AtomPtr addr, int index, int port,
                             do_scheduled_connect,
                             sizeof(ConnectRequestRec), &request);
     if(event == NULL) {
-        done = (*handler)(-ENOMEM, NULL, &request);
+        done = (*handler)(SOCK_INVALID_VALUE, -ENOMEM, NULL, &request);
         assert(done);
         return NULL;
     }
@@ -550,7 +552,7 @@ do_scheduled_connect(int status, FdEventHandlerPtr event)
     assert(request->index < (addr->length - 1) / sizeof(HostAddressRec));
 
     if(status) {
-        done = request->handler(status, event, request);
+        done = request->handler(status, 0, event, request);
         if(done) {
             releaseAtom(addr);
             request->addr = NULL;
@@ -564,12 +566,12 @@ do_scheduled_connect(int status, FdEventHandlerPtr event)
                                          request->index * 
                                          sizeof(HostAddressRec)];
     if(host->af != request->af) {
-        int newfd;
+		SOCKET_TYPE newfd;
         /* Ouch.  Our socket has a different protocol than the host
            address. */
         CLOSE(request->fd);
         newfd = serverSocket(host->af);
-        if(newfd < 0) {
+        if(IS_SOCK_INVALID(newfd)) {
             if(errno == EAFNOSUPPORT || errno == EPROTONOSUPPORT) {
                 int n = request->addr->length / sizeof(HostAddressRec);
                 if((request->index + 1) % n != request->firstindex) {
@@ -577,16 +579,16 @@ do_scheduled_connect(int status, FdEventHandlerPtr event)
                     goto again;
                 }
             }
-            request->fd = -1;
-            done = request->handler(-errno, event, request);
+            request->fd = SOCK_INVALID_VALUE;
+            done = request->handler(SOCK_INVALID_VALUE, -errno, event, request);
             assert(done);
             return 1;
         }
         if(newfd != request->fd) {
-            request->fd = dup2(newfd, request->fd);
+            request->fd = dup2(newfd, request->fd); // TODO: Is compatible with WinSock?
             CLOSE(newfd);
-            if(request->fd < 0) {
-                done = request->handler(-errno, event, request);
+            if(IS_SOCK_INVALID(request->fd)) {
+                done = request->handler(SOCK_INVALID_VALUE, -errno, event, request);
                 assert(done);
                 return 1;
             }
@@ -620,7 +622,7 @@ do_scheduled_connect(int status, FdEventHandlerPtr event)
     }
         
     if(rc >= 0 || errno == EISCONN) {
-        done = request->handler(1, event, request);
+        done = request->handler(1, 0, event, request);
         assert(done);
         releaseAtom(request->addr);
         request->addr = NULL;
@@ -637,7 +639,7 @@ do_scheduled_connect(int status, FdEventHandlerPtr event)
             request->index = (request->index + 1) % n;
             goto again;
         }
-        done = request->handler(-errno, event, request);
+        done = request->handler(SOCK_INVALID_VALUE, -errno, event, request);
         assert(done);
         releaseAtom(request->addr);
         request->addr = NULL;
@@ -646,8 +648,8 @@ do_scheduled_connect(int status, FdEventHandlerPtr event)
 }
 
 FdEventHandlerPtr
-do_accept(int fd,
-          int (*handler)(int, FdEventHandlerPtr, AcceptRequestPtr),
+do_accept(SOCKET_TYPE fd,
+          int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, AcceptRequestPtr),
           void *data)
 {
     FdEventHandlerPtr event;
@@ -655,7 +657,7 @@ do_accept(int fd,
 
     event = schedule_accept(fd, handler, data);
     if(event == NULL) {
-        done = (*handler)(-ENOMEM, NULL, NULL);
+        done = (*handler)(SOCK_INVALID_VALUE, -ENOMEM, NULL, NULL);
         assert(done);
     }
 
@@ -664,8 +666,8 @@ do_accept(int fd,
 }
 
 FdEventHandlerPtr
-schedule_accept(int fd,
-                int (*handler)(int, FdEventHandlerPtr, AcceptRequestPtr),
+schedule_accept(SOCKET_TYPE fd,
+                int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, AcceptRequestPtr),
                 void *data)
 {
     FdEventHandlerPtr event;
@@ -678,22 +680,23 @@ schedule_accept(int fd,
     event = registerFdEvent(fd, POLLIN, 
                             do_scheduled_accept, sizeof(request), &request);
     if(!event) {
-        done = (*handler)(-ENOMEM, NULL, NULL);
+        done = (*handler)(SOCK_INVALID_VALUE, -ENOMEM, NULL, NULL);
         assert(done);
     }
     return event;
 }
 
-int
+SOCKET_TYPE
 do_scheduled_accept(int status, FdEventHandlerPtr event)
 {
     AcceptRequestPtr request = (AcceptRequestPtr)&event->data;
-    int rc, done;
+	SOCKET_TYPE rc;
+	int done;
     socklen_t len;
     struct sockaddr_in addr;
 
     if(status) {
-        done = request->handler(status, event, request);
+        done = request->handler(status, 0, event, request);
         if(done) return done;
     }
 
@@ -701,19 +704,20 @@ do_scheduled_accept(int status, FdEventHandlerPtr event)
 
     rc = accept(request->fd, (struct sockaddr*)&addr, &len);
 
-    if(rc >= 0)
-        done = request->handler(rc, event, request);
+    if(!IS_SOCK_INVALID(rc))
+        done = request->handler(rc, 0, event, request);
     else
-        done = request->handler(-errno, event, request);
+        done = request->handler(SOCK_INVALID_VALUE, -errno, event, request);
     return done;
 }
 
 FdEventHandlerPtr
 create_listener(char *address, int port,
-                int (*handler)(int, FdEventHandlerPtr, AcceptRequestPtr),
+                int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, AcceptRequestPtr),
                 void *data)
 {
-    int fd, rc;
+	SOCKET_TYPE fd;
+	int rc;
     int one = 1;
     int done;
     struct sockaddr_in addr;
@@ -730,7 +734,7 @@ create_listener(char *address, int port,
         if(rc == 1)
             inet6 = 0;
     }
-    fd = -1;
+    fd = SOCK_INVALID_VALUE;
     errno = EAFNOSUPPORT;
 
 #ifdef HAVE_IPv6
@@ -739,13 +743,13 @@ create_listener(char *address, int port,
     }
 #endif
 
-    if(fd < 0 && (errno == EPROTONOSUPPORT || errno == EAFNOSUPPORT)) {
+    if(IS_SOCK_INVALID(fd) && (errno == EPROTONOSUPPORT || errno == EAFNOSUPPORT)) {
         inet6 = 0;
         fd = socket(PF_INET, SOCK_STREAM, 0);
     }
 
-    if(fd < 0) {
-        done = (*handler)(-errno, NULL, NULL);
+    if(IS_SOCK_INVALID(fd)) {
+        done = (*handler)(SOCK_INVALID_VALUE, -errno, NULL, NULL);
         assert(done);
         return NULL;
     }
@@ -782,7 +786,7 @@ create_listener(char *address, int port,
         memset(&addr, 0, sizeof(addr));
         rc = inet_aton(address, &addr.sin_addr);
         if(rc != 1) {
-            done = (*handler)(rc == 0 ? -ESYNTAX : -errno, NULL, NULL);
+            done = (*handler)(SOCK_INVALID_VALUE, rc == 0 ? -ESYNTAX : -errno, NULL, NULL);
             assert(done);
             return NULL;
         }
@@ -794,7 +798,7 @@ create_listener(char *address, int port,
     if(rc < 0) {
         do_log_error(L_ERROR, errno, "Couldn't bind");
         CLOSE(fd);
-        done = (*handler)(-errno, NULL, NULL);
+        done = (*handler)(SOCK_INVALID_VALUE, -errno, NULL, NULL);
         assert(done);
         return NULL;
     }
@@ -803,7 +807,7 @@ create_listener(char *address, int port,
     if(rc < 0) {
         do_log_error(L_ERROR, errno, "Couldn't set non blocking mode");
         CLOSE(fd);
-        done = (*handler)(-errno, NULL, NULL);
+        done = (*handler)(SOCK_INVALID_VALUE, -errno, NULL, NULL);
         assert(done);
         return NULL;
     }
@@ -812,7 +816,7 @@ create_listener(char *address, int port,
     if(rc < 0) {
         do_log_error(L_ERROR, errno, "Couldn't listen");
         CLOSE(fd);
-        done = (*handler)(-errno, NULL, NULL);
+        done = (*handler)(SOCK_INVALID_VALUE, -errno, NULL, NULL);
         assert(done);
         return NULL;
     }
@@ -828,7 +832,7 @@ create_listener(char *address, int port,
 #endif
 
 int
-setNonblocking(int fd, int nonblocking)
+setNonblocking(SOCKET_TYPE fd, int nonblocking)
 {
 #ifdef WIN32 /*MINGW*/
     return win32_setnonblocking(fd, nonblocking);
@@ -847,7 +851,7 @@ setNonblocking(int fd, int nonblocking)
 }
 
 int
-setNodelay(int fd, int nodelay)
+setNodelay(SOCKET_TYPE fd, int nodelay)
 {
     int val = nodelay ? 1 : 0;
     int rc;
@@ -859,7 +863,7 @@ setNodelay(int fd, int nodelay)
 
 #ifdef IPV6_V6ONLY
 int
-setV6only(int fd, int v6only)
+setV6only(SOCKET_TYPE fd, int v6only)
 {
     int val = v6only ? 1 : 0;
     int rc;
@@ -870,14 +874,14 @@ setV6only(int fd, int v6only)
 }
 #else
 int
-setV6only(int fd, int v6only)
+setV6only(SOCKET_TYPE fd, int v6only)
 {
     return 0;
 }
 #endif
 
 typedef struct _LingeringClose {
-    int fd;
+    SOCKET_TYPE fd;
     FdEventHandlerPtr handler;
     TimeEventHandlerPtr timeout;
 } LingeringCloseRec, *LingeringClosePtr;
@@ -930,7 +934,7 @@ lingeringCloseHandler(int status, FdEventHandlerPtr event)
 }
 
 int
-lingeringClose(int fd)
+lingeringClose(SOCKET_TYPE fd)
 {
     int rc;
     LingeringClosePtr l;
@@ -1125,7 +1129,7 @@ match(int af, unsigned char *data, NetAddressPtr list)
 }
 
 int
-netAddressMatch(int fd, NetAddressPtr list)
+netAddressMatch(SOCKET_TYPE fd, NetAddressPtr list)
 {
     int rc;
     socklen_t len;

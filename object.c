@@ -39,7 +39,7 @@ int publicObjectLowMark = 0, objectHighMark = 2048;
 static ObjectPtr *objectHashTable;
 int maxExpiresAge = (30 * 24 + 1) * 3600;
 int maxAge = (14 * 24 + 1) * 3600;
-float maxAgeFraction = 0.1;
+float maxAgeFraction = 0.1f;
 int maxNoModifiedAge = 23 * 60;
 int maxWriteoutWhenIdle = 64 * 1024;
 int maxObjectsWhenIdle = 32;
@@ -546,7 +546,7 @@ objectPrintf(ObjectPtr object, int offset, const char *format, ...)
         return;
     }
 
-    rc = objectAddData(object, buf, offset, strlen(buf));
+    rc = objectAddData(object, buf, offset, (int)strlen(buf));
     free(buf);
     if(rc < 0)
         abortObject(object, 500, internAtom("Couldn't add data to object"));
@@ -821,14 +821,14 @@ discardObjects(int all, int force)
 
     in_discardObjects = 1;
     
-    if(all || force || used_chunks >= CHUNKS(chunkHighMark) ||
+    if(all || force || used_chunks >= (int)CHUNKS(chunkHighMark) ||
        publicObjectCount >= publicObjectLowMark ||
        publicObjectCount + privateObjectCount >= objectHighMark) {
         object = object_list_end;
         while(object && 
-              (all || force || used_chunks >= CHUNKS(chunkLowMark))) {
+              (all || force || used_chunks >= (int)CHUNKS(chunkLowMark))) {
             if(force || ((object->flags & OBJECT_PUBLIC) &&
-                         object->numchunks > CHUNKS(chunkLowMark) / 4)) {
+                         object->numchunks > (int)CHUNKS(chunkLowMark) / 4)) {
                 int j;
                 for(j = 0; j < object->numchunks; j++) {
                     if(object->chunks[j].locked) {
@@ -850,8 +850,8 @@ discardObjects(int all, int force)
         object = object_list_end;
         while(object && 
               (all || force ||
-               used_chunks - i > CHUNKS(chunkLowMark) ||
-               used_chunks > CHUNKS(chunkCriticalMark) ||
+               used_chunks - i > (int)CHUNKS(chunkLowMark) ||
+               used_chunks > (int)CHUNKS(chunkCriticalMark) ||
                publicObjectCount > publicObjectLowMark)) {
             ObjectPtr next_object = object->previous;
             if(object->refcount == 0) {
@@ -866,15 +866,15 @@ discardObjects(int all, int force)
         }
 
         object = object_list_end;
-        if(force || used_chunks > CHUNKS(chunkCriticalMark)) {
-            if(used_chunks > CHUNKS(chunkCriticalMark)) {
+        if(force || used_chunks > (int)CHUNKS(chunkCriticalMark)) {
+            if(used_chunks > (int)CHUNKS(chunkCriticalMark)) {
                 do_log(L_WARN, 
                        "Short on chunk memory -- "
                        "attempting to punch holes "
                        "in the middle of objects.\n");
             }
             while(object && 
-                  (force || used_chunks > CHUNKS(chunkCriticalMark))) {
+                  (force || used_chunks > (int)CHUNKS(chunkCriticalMark))) {
                 if(force || (object->flags & OBJECT_PUBLIC)) {
                     int j;
                     for(j = object->numchunks - 1; j >= 0; j--) {
@@ -963,32 +963,32 @@ objectIsStale(ObjectPtr object, CacheControlPtr cache_control)
         s_maxage = object->s_maxage;
     
     if(max_age >= 0)
-        stale = MIN(stale, object->age + max_age);
+        stale = (int)MIN(stale, object->age + max_age);
 
     if(cacheIsShared && s_maxage >= 0)
-        stale = MIN(stale, object->age + s_maxage);
+        stale = (int)MIN(stale, object->age + s_maxage);
 
     if(object->expires >= 0 || object->max_age >= 0)
-        stale = MIN(stale, object->age + maxExpiresAge);
+        stale = (int)MIN(stale, object->age + maxExpiresAge);
     else
-        stale = MIN(stale, object->age + maxAge);
+        stale = (int)MIN(stale, object->age + maxAge);
 
     /* RFC 2616 14.9.3: server-side max-age overrides expires */
 
     if(object->expires >= 0 && object->max_age < 0) {
         /* This protects against clock skew */
-        stale = MIN(stale, object->age + object->expires - date);
+        stale = (int)MIN(stale, object->age + object->expires - date);
     }
 
     if(object->expires < 0 && object->max_age < 0) {
         /* No server-side information -- heuristic expiration */
         if(object->last_modified >= 0)
             /* Again, take care of clock skew */
-            stale = MIN(stale,
+            stale = (int)MIN(stale,
                         object->age +
                         (date - object->last_modified) * maxAgeFraction);
         else
-            stale = MIN(stale, object->age + maxNoModifiedAge);
+            stale = (int)MIN(stale, object->age + maxNoModifiedAge);
     }
 
     if(!(flags & CACHE_MUST_REVALIDATE) &&

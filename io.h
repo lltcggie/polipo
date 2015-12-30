@@ -40,7 +40,7 @@ THE SOFTWARE.
 
 typedef struct _StreamRequest {
     short operation;
-    short fd;
+	SOCKET_TYPE fd;
     int offset;
     int len;
     int len2;
@@ -59,24 +59,24 @@ typedef struct _StreamRequest {
     } u;
     char *buf;
     char *buf2;
-    int (*handler)(int, FdEventHandlerPtr, struct _StreamRequest*);
+    int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, struct _StreamRequest*);
     void *data;
 } StreamRequestRec, *StreamRequestPtr;
 
 typedef struct _ConnectRequest {
-    int fd;
+    SOCKET_TYPE fd;
     int af;
     struct _Atom *addr;
     int firstindex;
     int index;
     int port;
-    int (*handler)(int, FdEventHandlerPtr, struct _ConnectRequest*);
+    int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, struct _ConnectRequest*);
     void *data;
 } ConnectRequestRec, *ConnectRequestPtr;
 
 typedef struct _AcceptRequest {
-    int fd;
-    int (*handler)(int, FdEventHandlerPtr, struct _AcceptRequest*);
+    SOCKET_TYPE fd;
+    int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, struct _AcceptRequest*);
     void *data;
 } AcceptRequestRec, *AcceptRequestPtr;
 
@@ -84,39 +84,39 @@ void preinitIo();
 void initIo();
 
 FdEventHandlerPtr
-do_stream(int operation, int fd, int offset, char *buf, int len,
-          int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+do_stream(int operation, SOCKET_TYPE fd, int offset, char *buf, int len,
+          int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
           void *data);
 
 FdEventHandlerPtr
-do_stream_h(int operation, int fd, int offset, 
+do_stream_h(int operation, SOCKET_TYPE fd, int offset, 
             char *header, int hlen, char *buf, int len,
-            int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+            int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
             void *data);
 
 FdEventHandlerPtr
-do_stream_2(int operation, int fd, int offset, 
+do_stream_2(int operation, SOCKET_TYPE fd, int offset, 
             char *buf, int len, char *buf2, int len2,
-            int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+            int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
             void *data);
 
 FdEventHandlerPtr
-do_stream_3(int operation, int fd, int offset, 
+do_stream_3(int operation, SOCKET_TYPE fd, int offset, 
             char *buf, int len, char *buf2, int len2, char *buf3, int len3,
-            int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+            int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
             void *data);
 
 FdEventHandlerPtr
-do_stream_buf(int operation, int fd, int offset, char **buf_location, int len,
-              int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+do_stream_buf(int operation, SOCKET_TYPE fd, int offset, char **buf_location, int len,
+              int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
               void *data);
 
 FdEventHandlerPtr
-schedule_stream(int operation, int fd, int offset,
+schedule_stream(int operation, SOCKET_TYPE fd, int offset,
                 char *header, int hlen,
                 char *buf, int len, char *buf2, int len2, char *buf3, int len3,
                 char **buf_location,
-                int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+                int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
                 void *data);
 
 int do_scheduled_stream(int, FdEventHandlerPtr);
@@ -124,31 +124,31 @@ int streamRequestDone(StreamRequestPtr);
 
 FdEventHandlerPtr
 do_connect(struct _Atom *addr, int index, int port,
-           int (*handler)(int, FdEventHandlerPtr, ConnectRequestPtr),
+           int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, ConnectRequestPtr),
            void *data);
 
 int do_scheduled_connect(int, FdEventHandlerPtr event);
 
 FdEventHandlerPtr
-do_accept(int fd,
-          int (*handler)(int, FdEventHandlerPtr, AcceptRequestPtr),
+do_accept(SOCKET_TYPE fd,
+          int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, AcceptRequestPtr),
           void* data);
 
 FdEventHandlerPtr 
-schedule_accept(int fd,
-                int (*handler)(int, FdEventHandlerPtr, AcceptRequestPtr),
+schedule_accept(SOCKET_TYPE fd,
+                int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, AcceptRequestPtr),
                 void* data);
 
-int do_scheduled_accept(int, FdEventHandlerPtr event);
+SOCKET_TYPE do_scheduled_accept(int, FdEventHandlerPtr event);
 
 FdEventHandlerPtr
 create_listener(char *address, int port,
-                int (*handler)(int, FdEventHandlerPtr, AcceptRequestPtr),
+                int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, AcceptRequestPtr),
                 void *data);
-int setNonblocking(int fd, int nonblocking);
-int setNodelay(int fd, int nodelay);
-int setV6only(int fd, int v6only);
-int lingeringClose(int fd);
+int setNonblocking(SOCKET_TYPE fd, int nonblocking);
+int setNodelay(SOCKET_TYPE fd, int nodelay);
+int setV6only(SOCKET_TYPE fd, int v6only);
+int lingeringClose(SOCKET_TYPE fd);
 
 typedef struct _NetAddress {
     int prefix;
@@ -157,5 +157,5 @@ typedef struct _NetAddress {
 } NetAddressRec, *NetAddressPtr;
 
 NetAddressPtr parseNetAddress(AtomListPtr list);
-int netAddressMatch(int fd, NetAddressPtr list) ATTRIBUTE ((pure));
+int netAddressMatch(SOCKET_TYPE fd, NetAddressPtr list) ATTRIBUTE ((pure));
 

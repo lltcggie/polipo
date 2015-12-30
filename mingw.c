@@ -201,7 +201,8 @@ int win32_poll(struct pollfd *fds, unsigned int nfds, int timo)
 {
     struct timeval timeout, *toptr;
     fd_set ifds, ofds, efds, *ip, *op;
-    int i, rc;
+	unsigned int i;
+	int rc;
 
     /* Set up the file-descriptor sets in ifds, ofds and efds. */
     FD_ZERO(&ifds);
@@ -243,7 +244,7 @@ int win32_poll(struct pollfd *fds, unsigned int nfds, int timo)
 
     if(rc > 0) {
         for (i = 0; i < nfds; ++i) {
-            int fd = fds[i].fd;
+            SOCKET_TYPE fd = fds[i].fd;
     	if(fds[i].events & (POLLIN|POLLPRI) && FD_ISSET(fd, &ifds))
     		fds[i].revents |= POLLIN;
     	if(fds[i].events & POLLOUT && FD_ISSET(fd, &ofds))
@@ -422,7 +423,7 @@ win32_stat(const char *filename, struct stat *ss)
     int len, rc, saved_errno;
     char *noslash;
 
-    len = strlen(filename);
+    len = (int)strlen(filename);
     if(len <= 1 || filename[len - 1] != '/')
         return stat(filename, ss);
 
@@ -444,11 +445,11 @@ win32_stat(const char *filename, struct stat *ss)
 #ifndef HAVE_READV_WRITEV
 
 int
-polipo_writev(int fd, const struct iovec *vector, int count)
+polipo_writev(SOCKET_TYPE fd, const struct iovec *vector, int count)
 {
     int rc;                     /* Return Code */
     if(count == 1) {
-        rc = WRITE(fd, vector->iov_base, vector->iov_len);
+        rc = WRITE(fd, vector->iov_base, (int)vector->iov_len);
     } else {
         int n = 0;              /* Total bytes to write */
         char *buf = 0;          /* Buffer to copy to before writing */
@@ -457,7 +458,7 @@ polipo_writev(int fd, const struct iovec *vector, int count)
 
         /* Figure out the required buffer size */
         for(i = 0; i < count; i++) {
-            n += vector[i].iov_len;
+            n += (int)vector[i].iov_len;
         }
 
         /* Allocate the buffer. If the allocation fails, bail out */
@@ -470,7 +471,7 @@ polipo_writev(int fd, const struct iovec *vector, int count)
         /* Copy the contents of the vector array to the buffer */
         for(i = 0; i < count; i++) {
             memcpy(&buf[offset], vector[i].iov_base, vector[i].iov_len);
-            offset += vector[i].iov_len;
+            offset += (int)vector[i].iov_len;
         }
         assert(offset == n);
 
@@ -482,12 +483,12 @@ polipo_writev(int fd, const struct iovec *vector, int count)
 }
 
 int
-polipo_readv(int fd, const struct iovec *vector, int count)
+polipo_readv(SOCKET_TYPE fd, const struct iovec *vector, int count)
 {
     int ret = 0;                     /* Return value */
     int i;
     for(i = 0; i < count; i++) {
-        int n = vector[i].iov_len;
+        int n = (int)vector[i].iov_len;
         int rc = READ(fd, vector[i].iov_base, n);
         if(rc == n) {
             ret += rc;

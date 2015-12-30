@@ -755,7 +755,7 @@ localObjectMimeType(ObjectPtr object, char **encoding_return)
     }
 
     for(i = 0; i < sizeof(mimeEntries) / sizeof(mimeEntries[0]); i++) {
-        int len = strlen(mimeEntries[i].extension);
+        int len = (int)strlen(mimeEntries[i].extension);
         if(nlen > len && 
            name[nlen - len - 1] == '.' &&
            memcmp(name + nlen - len, mimeEntries[i].extension, len) == 0)
@@ -800,7 +800,7 @@ validateLocalEntry(ObjectPtr object, int fd,
         n = -1;
 
     if(n > 0 && object->etag) {
-        if(strlen(object->etag) != n ||
+        if((int)strlen(object->etag) != n ||
            memcmp(object->etag, buf, n) != 0)
             return -1;
     }
@@ -952,7 +952,7 @@ validateEntry(ObjectPtr object, int fd,
     if(body_offset < 0)
         body_offset = n;
 
-    if(!location || strlen(location) != object->key_size ||
+    if(!location || (int)strlen(location) != object->key_size ||
        memcmp(location, object->key, object->key_size) != 0) {
         do_log(L_ERROR, "Inconsistent cache file for %s.\n", scrub(location));
         goto invalid;
@@ -1870,7 +1870,7 @@ readDiskObject(char *filename, struct stat *sb)
             size = 0;
     } else if(S_ISDIR(sb->st_mode)) {
         char *n;
-        n = dirnameUrl(buf, 512, (char*)filename, strlen(filename));
+        n = dirnameUrl(buf, 512, (char*)filename, (int)strlen(filename));
         if(n == NULL)
             goto fail;
         location = strdup(n);
@@ -1967,7 +1967,7 @@ static int
 filter(DiskObjectPtr p, const char *root, int n, int recursive)
 {
     char *cp;
-    int m = strlen(p->location);
+    int m = (int)strlen(p->location);
     if(m < n)
         return 0;
     if(memcmp(root, p->location, n) != 0)
@@ -1986,7 +1986,7 @@ filter(DiskObjectPtr p, const char *root, int n, int recursive)
 DiskObjectPtr
 filterDiskObjects(DiskObjectPtr from, const char *root, int recursive)
 {
-    int n = strlen(root);
+    int n = (int)strlen(root);
     DiskObjectPtr p, q;
 
     while(from && !filter(from, root, n, recursive)) {
@@ -2050,11 +2050,11 @@ insertDirs(DiskObjectPtr from)
 
     p = NULL; q = from;
     while(q) {
-        n = strlen(q->location);
+        n = (int)strlen(q->location);
         if(n > 0 && q->location[n - 1] != '/') {
             cp = strrchr(q->location, '/');
             m = cp - q->location + 1;
-            if(cp && (!p || strlen(p->location) < m ||
+            if(cp && (!p || (int)strlen(p->location) < m ||
                       memcmp(p->location, q->location, m) != 0)) {
                 new = malloc(sizeof(DiskObjectRec));
                 if(!new) break;
@@ -2119,12 +2119,12 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
         goto trailer;
     }
 
-    if(strlen(root) < 8) {
+    if((int)strlen(root) < 8) {
         memcpy(buf, diskCacheRoot->string, diskCacheRoot->length);
         buf[diskCacheRoot->length] = '\0';
         n = diskCacheRoot->length;
     } else {
-        n = urlDirname(buf, 1024, root, strlen(root));
+        n = urlDirname(buf, 1024, root, (int)strlen(root));
     }
     if(n > 0) {
         if(recursive) {
@@ -2152,7 +2152,7 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
                 while(1) {
                     dirent = readdir(dir);
                     if(!dirent) break;
-                    if(n + strlen(dirent->d_name) < 1024) {
+                    if(n + (int)strlen(dirent->d_name) < 1024) {
                         strcpy(buf + n, dirent->d_name);
                     } else {
                         continue;
@@ -2180,7 +2180,7 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
         entryno = 0;
         while(dobjects) {
             DiskObjectPtr dobject = dobjects;
-            i = strlen(dobject->location);
+            i = (int)strlen(dobject->location);
             isdir = (i == 0 || dobject->location[i - 1] == '/');
             if(entryno % 2)
                 fprintf(out, "<tr class=odd>");
@@ -2190,7 +2190,7 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
                 fprintf(out, "<td><a href=\"%s\"><tt>",
                         dobject->location);
                 htmlPrint(out,
-                          dobject->location, strlen(dobject->location));
+                          dobject->location, (int)strlen(dobject->location));
                 fprintf(out, "</tt></a></td> ");
                 if(dobject->length >= 0) {
                     if(dobject->size == dobject->length)
@@ -2234,7 +2234,7 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
             } else {
                 fprintf(out, "<td><tt>");
                 htmlPrint(out, dobject->location,
-                          strlen(dobject->location));
+                          (int)strlen(dobject->location));
                 fprintf(out, "</tt></td><td></td><td></td><td></td>");
             }
             if(isdir) {
@@ -2454,7 +2454,7 @@ expireDiskObjects()
             if(fe->fts_info == FTS_DP || fe->fts_info == FTS_DC ||
                fe->fts_info == FTS_DNR) {
                 if(fe->fts_accpath[0] == '/' &&
-                   strlen(fe->fts_accpath) <= diskCacheRoot->length)
+                   (int)strlen(fe->fts_accpath) <= diskCacheRoot->length)
                     continue;
                 dirs++;
                 rc = rmdir(fe->fts_accpath);

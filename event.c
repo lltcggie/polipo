@@ -298,7 +298,7 @@ cancelTimeEvent(TimeEventHandlerPtr event)
 }
 
 int
-allocateFdEventNum(int fd)
+allocateFdEventNum(SOCKET_TYPE fd)
 {
     int i;
     if(fdEventNum < fdEventSize) {
@@ -353,7 +353,7 @@ deallocateFdEventNum(int i)
 }
 
 FdEventHandlerPtr 
-makeFdEvent(int fd, int poll_events, 
+makeFdEvent(SOCKET_TYPE fd, int poll_events, 
             int (*handler)(int, FdEventHandlerPtr), int dsize, void *data)
 {
     FdEventHandlerPtr event;
@@ -382,7 +382,7 @@ FdEventHandlerPtr
 registerFdEventHelper(FdEventHandlerPtr event)
 {
     int i;
-    int fd = event->fd;
+    SOCKET_TYPE fd = event->fd;
 
     for(i = 0; i < fdEventNum; i++)
         if(poll_fds[i].fd == fd)
@@ -409,7 +409,7 @@ registerFdEventHelper(FdEventHandlerPtr event)
 }
 
 FdEventHandlerPtr 
-registerFdEvent(int fd, int poll_events, 
+registerFdEvent(SOCKET_TYPE fd, int poll_events, 
                 int (*handler)(int, FdEventHandlerPtr), int dsize, void *data)
 {
     FdEventHandlerPtr event;
@@ -538,7 +538,7 @@ findEvent(int revents, FdEventHandlerPtr events)
 }
 
 typedef struct _FdEventHandlerPoke {
-    int fd;
+    SOCKET_TYPE fd;
     int what;
     int status;
 } FdEventHandlerPokeRec, *FdEventHandlerPokePtr;
@@ -547,7 +547,7 @@ static int
 pokeFdEventHandler(TimeEventHandlerPtr tevent)
 {
     FdEventHandlerPokePtr poke = (FdEventHandlerPokePtr)tevent->data;
-    int fd = poke->fd;
+    SOCKET_TYPE fd = poke->fd;
     int what = poke->what;
     int status = poke->status;
     int done;
@@ -582,7 +582,7 @@ pokeFdEventHandler(TimeEventHandlerPtr tevent)
 }
 
 void 
-pokeFdEvent(int fd, int status, int what)
+pokeFdEvent(SOCKET_TYPE fd, int status, int what)
 {
     TimeEventHandlerPtr handler;
     FdEventHandlerPokeRec poke;

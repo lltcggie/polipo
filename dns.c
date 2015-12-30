@@ -126,7 +126,7 @@ parseResolvConf(char *filename)
         if(p == NULL)
             break;
 
-        n = strlen(buf);
+        n = (int)strlen(buf);
         if(buf[n - 1] != '\n') {
             int c;
             do_log(L_WARN, "DNS: overly long line in %s -- skipping.\n",
@@ -173,7 +173,7 @@ void
 preinitDns()
 {
 #ifdef HAVE_IPv6
-    int fd;
+    SOCKET_TYPE fd;
 #endif
 
     assert(sizeof(struct in_addr) == 4);
@@ -188,7 +188,7 @@ preinitDns()
 
 #ifdef HAVE_IPv6
     fd = socket(PF_INET6, SOCK_STREAM, 0);
-    if(fd < 0) {
+    if(IS_SOCK_INVALID(fd)) {
         if(errno == EPROTONOSUPPORT || errno == EAFNOSUPPORT) {
             dnsQueryIPv6 = 0;
         } else {
@@ -264,11 +264,11 @@ initDns()
 int
 do_gethostbyname(char *origname,
                  int count,
-                 int (*handler)(int, GethostbynameRequestPtr),
+                 int (*handler)(SOCKET_TYPE, int, GethostbynameRequestPtr),
                  void *data)
 {
     ObjectPtr object;
-    int n = strlen(origname);
+    int n = (int)strlen(origname);
     AtomPtr name;
     GethostbynameRequestRec request;
     int done, rc;
@@ -285,11 +285,11 @@ do_gethostbyname(char *origname,
         if(n <= 0) {
             request.error_message = internAtom("empty name");
             do_log(L_ERROR, "Empty DNS name.\n");
-            done = handler(-EINVAL, &request);
+            done = handler(SOCK_INVALID_VALUE , -EINVAL, &request);
         } else {
             request.error_message = internAtom("name too long");
             do_log(L_ERROR, "DNS name too long.\n");
-            done = handler(-ENAMETOOLONG, &request);
+            done = handler(SOCK_INVALID_VALUE, -ENAMETOOLONG, &request);
         }
         assert(done);
         releaseAtom(request.error_message);
@@ -304,7 +304,7 @@ do_gethostbyname(char *origname,
     if(name == NULL) {
         request.error_message = internAtom("couldn't allocate name");
         do_log(L_ERROR, "Couldn't allocate DNS name.\n");
-        done = handler(-ENOMEM, &request);
+        done = handler(SOCK_INVALID_VALUE, -ENOMEM, &request);
         assert(done);
         releaseAtom(request.error_message);
         return 1;
@@ -329,7 +329,7 @@ do_gethostbyname(char *origname,
         if(object == NULL) {
             request.error_message = internAtom("Couldn't allocate object");
             do_log(L_ERROR, "Couldn't allocate DNS object.\n");
-            done = handler(-ENOMEM, &request);
+            done = handler(SOCK_INVALID_VALUE, -ENOMEM, &request);
             assert(done);
             releaseAtom(name);
             releaseAtom(request.error_message);
@@ -379,9 +379,9 @@ do_gethostbyname(char *origname,
     releaseObject(object);
 
     if(request.addr && request.addr->length > 0)
-        done = handler(1, &request);
+        done = handler(1, 0, &request);
     else
-        done = handler(-EDNS_HOST_NOT_FOUND, &request);
+        done = handler(SOCK_INVALID_VALUE, -EDNS_HOST_NOT_FOUND, &request);
     assert(done);
 
     releaseAtom(request.addr); request.addr = NULL;
@@ -391,7 +391,7 @@ do_gethostbyname(char *origname,
 
  fail:
     releaseNotifyObject(object);
-    done = handler(-errno, &request);
+    done = handler(SOCK_INVALID_VALUE, -errno, &request);
     assert(done);
     releaseAtom(name);
     return 1;
@@ -731,7 +731,7 @@ really_do_gethostbyname(AtomPtr name, ObjectPtr object)
 
 #ifndef NO_FANCY_RESOLVER
 
-static int dnsSocket = -1;
+static SOCKET_TYPE dnsSocket = SOCK_INVALID_VALUE;
 static FdEventHandlerPtr dnsSocketHandler = NULL;
 
 static int
@@ -878,7 +878,7 @@ establishDnsSocket()
     int sa_size = sizeof(struct sockaddr_in);
 #endif
 
-    if(dnsSocket < 0) {
+    if(IS_SOCK_INVALID(dnsSocket)) {
         assert(!dnsSocketHandler);
         dnsSocket = socket(pf, SOCK_DGRAM, 0);
         if(dnsSocket < 0) {
@@ -901,7 +901,7 @@ establishDnsSocket()
         if(dnsSocketHandler == NULL) {
             do_log(L_ERROR, "Couldn't register DNS socket handler.\n");
             CLOSE(dnsSocket);
-            dnsSocket = -1;
+            dnsSocket = SOCK_INVALID_VALUE;
             return -ENOMEM;
         }
     }
@@ -918,7 +918,7 @@ sendQuery(DnsQueryPtr query)
     int af[2];
     int i;
 
-    if(dnsSocket < 0)
+    if(IS_SOCK_INVALID(dnsSocket))
         return -1;
 
     if(dnsQueryIPv6 <= 0) {
@@ -1091,7 +1091,7 @@ really_do_dns(AtomPtr name, ObjectPtr object)
 static int
 dnsReplyHandler(int abort, FdEventHandlerPtr event)
 {
-    int fd = event->fd;
+    SOCKET_TYPE fd = event->fd;
     char buf[2048];
     int len, rc;
     ObjectPtr object;
@@ -1672,7 +1672,7 @@ do { \
                     jj = labelsToString(buf, i, n,
                                         tmp, 512, &kk);
                     if(jj < 0 ||
-                       kk != strlen(addresses + 1) ||
+                       kk != (int)strlen(addresses + 1) ||
                        memcmp(addresses + 1, tmp, kk) != 0) {
                         do_log(L_WARN, "DNS: "
                                "%s: host has multiple CNAMEs -- "

@@ -39,12 +39,12 @@ typedef struct _Tunnel {
     AtomPtr hostname;
     int port;
     int flags;
-    int fd1;
+	SOCKET_TYPE fd1;
     CircularBufferRec buf1;
-    int fd2;
+	SOCKET_TYPE fd2;
     CircularBufferRec buf2;
 } TunnelRec, *TunnelPtr;
 
-void do_tunnel(int fd, char *buf, int offset, int len, AtomPtr url);
+void do_tunnel(SOCKET_TYPE fd, char *buf, int offset, int len, AtomPtr url);
 
 void listTunnels(FILE *out);

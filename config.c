@@ -105,7 +105,7 @@ printString(FILE *out, char *string, int html)
     if(html) {
         char buf[512];
         int i;
-        i = htmlString(buf, 0, 512, string, strlen(string));
+        i = htmlString(buf, 0, 512, string, (int)strlen(string));
         if(i < 0) {
             fprintf(out, "(overflow)");
             return;
@@ -502,7 +502,7 @@ parseState(char *buf, int offset, int kind)
     while(letter(buf[i]))
         i++;
     for(n = 0; n < sizeof(states) / sizeof(states[0]); n++) {
-        if(strlen(states[n].name) == i - offset &&
+        if((int)strlen(states[n].name) == i - offset &&
            lwrcmp(buf + offset, states[n].name, i - offset) == 0) {
             state = states[n].value;
             break;

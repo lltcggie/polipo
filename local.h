@@ -23,7 +23,7 @@ THE SOFTWARE.
 #ifdef HAVE_FORK
 typedef struct _SpecialRequest {
     ObjectPtr object;
-    int fd;
+    SOCKET_TYPE fd;
     void *buf;
     int offset;
     pid_t pid;

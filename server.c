@@ -387,7 +387,7 @@ void
 httpServerClientReset(HTTPRequestPtr request)
 {
     if(request->connection && 
-       request->connection->fd >= 0 &&
+       IS_SOCK_INVALID(request->connection->fd) &&
        !request->connection->connecting &&
        request->connection->request == request)
         pokeFdEvent(request->connection->fd, -ECLIENTRESET, POLLIN | POLLOUT);
@@ -591,8 +591,8 @@ httpServerConnectionHandler(int status,
 {
     HTTPConnectionPtr connection = request->data;
 
-    assert(connection->fd < 0);
-    if(request->fd >= 0) {
+    assert(IS_SOCK_INVALID(connection->fd));
+    if(!IS_SOCK_INVALID(request->fd)) {
         int rc;
         connection->fd = request->fd;
         connection->server->addrindex = request->index;
@@ -609,8 +609,8 @@ httpServerSocksHandler(int status, SocksRequestPtr request)
 {
     HTTPConnectionPtr connection = request->data;
 
-    assert(connection->fd < 0);
-    if(request->fd >= 0) {
+    assert(IS_SOCK_INVALID(connection->fd));
+    if(!IS_SOCK_INVALID(request->fd)) {
         connection->fd = request->fd;
         connection->server->addrindex = 0;
     }
@@ -1189,7 +1189,7 @@ httpServerFinish(HTTPConnectionPtr connection, int s, int offset)
            extremely unlikely to happen.  As for POST/PUT requests,
            they are not pipelined, so this can only happen if the
            server sent an error reply early. */
-        assert(connection->fd >= 0);
+        assert(!IS_SOCK_INVALID(connection->fd));
         shutdown(connection->fd, 1);
         pokeFdEvent(connection->fd, -EDOSHUTDOWN, POLLOUT);
         httpServerDelayedFinish(connection);
@@ -1207,7 +1207,7 @@ httpServerFinish(HTTPConnectionPtr connection, int s, int offset)
                request->time0.tv_sec != null_time.tv_sec)
                 rtt = timeval_minus_usec(&request->time1, &request->time0);
             if(size >= 8192 && d > 50000)
-                rate = ((double)size / (double)d) * 1000000.0 + 0.5;
+                rate = (int)(((double)size / (double)d) * 1000000.0 + 0.5);
         }
         request->time0 = null_time;
         request->time1 = null_time;
@@ -1273,9 +1273,9 @@ httpServerFinish(HTTPConnectionPtr connection, int s, int offset)
             cancelTimeEvent(connection->timeout);
         connection->timeout = NULL;
         httpConnectionDestroyBuf(connection);
-        if(connection->fd >= 0)
+        if(!IS_SOCK_INVALID(connection->fd))
             CLOSE(connection->fd);
-        connection->fd = -1;
+        connection->fd = SOCK_INVALID_VALUE;
         server->persistent -= 1;
         if(server->persistent < -5)
             server->numslots = MIN(server->maxslots, serverMaxSlots);

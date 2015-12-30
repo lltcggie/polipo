@@ -26,7 +26,7 @@ static int
 httpAcceptAgain(TimeEventHandlerPtr event)
 {
     FdEventHandlerPtr newevent;
-    int fd = *(int*)event->data;
+    SOCKET_TYPE fd = *(int*)event->data;
 
     newevent = schedule_accept(fd, httpAccept, NULL);
     if(newevent == NULL) {
@@ -41,13 +41,13 @@ httpAcceptAgain(TimeEventHandlerPtr event)
 }
 
 int
-httpAccept(int fd, FdEventHandlerPtr event, AcceptRequestPtr request)
+httpAccept(SOCKET_TYPE fd, FdEventHandlerPtr event, AcceptRequestPtr request)
 {
     int rc;
     HTTPConnectionPtr connection;
     TimeEventHandlerPtr timeout;
 
-    if(fd < 0) {
+    if(IS_SOCK_INVALID(fd)) {
         if(-fd == EINTR || -fd == EAGAIN || -fd == EWOULDBLOCK)
             return 0;
         do_log_error(L_ERROR, -fd, "Couldn't establish listening socket");
@@ -206,7 +206,7 @@ httpClientFinish(HTTPConnectionPtr connection, int s)
     connection->te = TE_IDENTITY;
 
     if(!s) {
-        assert(connection->fd > 0);
+        assert(!IS_SOCK_INVALID(connection->fd));
         connection->serviced++;
         httpSetTimeout(connection, clientTimeout);
         if(!(connection->flags & CONN_READER)) {
@@ -241,7 +241,7 @@ httpClientFinish(HTTPConnectionPtr connection, int s)
 
     if(connection->flags & CONN_READER) {
         httpSetTimeout(connection, 10);
-        if(connection->fd < 0) return;
+        if(IS_SOCK_INVALID(connection->fd)) return;
         if(s >= 2) {
             pokeFdEvent(connection->fd, -EDOSHUTDOWN, POLLIN);
         } else {
@@ -272,13 +272,13 @@ httpClientFinish(HTTPConnectionPtr connection, int s)
     if(connection->timeout)
         cancelTimeEvent(connection->timeout);
     connection->timeout = NULL;
-    if(connection->fd >= 0) {
+    if(!IS_SOCK_INVALID(connection->fd)) {
         if(s >= 2)
             CLOSE(connection->fd);
         else
             lingeringClose(connection->fd);
     }
-    connection->fd = -1;
+    connection->fd = SOCK_INVALID_VALUE;
     free(connection);
 }
 
@@ -426,7 +426,7 @@ httpClientRawErrorHeaders(HTTPConnectionPtr connection,
                           int code, AtomPtr message,
                           int close, AtomPtr headers)
 {
-    int fd = connection->fd;
+    SOCKET_TYPE fd = connection->fd;
     int n;
     char *url; int url_len;
     char *etag;
@@ -815,7 +815,7 @@ httpClientRequest(HTTPRequestPtr request, AtomPtr url)
         connection->flags &= ~CONN_READER;
         do_tunnel(connection->fd, connection->reqbuf, 
                   connection->reqbegin, connection->reqlen, url);
-        connection->fd = -1;
+        connection->fd = SOCK_INVALID_VALUE;
         connection->reqbuf = NULL;
         connection->reqlen = 0;
         connection->reqbegin = 0;

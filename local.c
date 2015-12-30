@@ -131,7 +131,7 @@ serversList(FILE *out, char *dummy)
 static int
 matchUrl(char *base, ObjectPtr object)
 {
-    int n = strlen(base);
+    int n = (int)strlen(base);
     if(object->key_size < n)
         return 0;
     if(memcmp(base, object->key, n) != 0)
@@ -717,7 +717,7 @@ fillSpecialObject(ObjectPtr object, void (*fn)(FILE*, char*), void* closure)
     rewind(tmp);
     offset = 0;
     while(1) {
-        len = fread(buf, 1, CHUNK_SIZE, tmp);
+        len = (int)fread(buf, 1, CHUNK_SIZE, tmp);
         if(len <= 0 && ferror(tmp)) {
             abortObject(object, 503, internAtom(pstrerror(errno)));
             goto done;

@@ -32,7 +32,7 @@ typedef struct _TimeEventHandler {
 } TimeEventHandlerRec, *TimeEventHandlerPtr;
 
 typedef struct _FdEventHandler {
-    short fd;
+	SOCKET_TYPE fd;
     short poll_events;
     struct _FdEventHandler *previous, *next;
     int (*handler)(int, struct _FdEventHandler*);
@@ -63,19 +63,19 @@ TimeEventHandlerPtr scheduleTimeEvent(int seconds,
 int timeval_minus_usec(const struct timeval *s1, const struct timeval *s2)
      ATTRIBUTE((pure));
 void cancelTimeEvent(TimeEventHandlerPtr);
-int allocateFdEventNum(int fd);
+int allocateFdEventNum(SOCKET_TYPE fd);
 void deallocateFdEventNum(int i);
 void timeToSleep(struct timeval *);
 void runTimeEventQueue(void);
-FdEventHandlerPtr makeFdEvent(int fd, int poll_events, 
+FdEventHandlerPtr makeFdEvent(SOCKET_TYPE fd, int poll_events, 
                               int (*handler)(int, FdEventHandlerPtr), 
                               int dsize, void *data);
-FdEventHandlerPtr registerFdEvent(int fd, int poll_events,
+FdEventHandlerPtr registerFdEvent(SOCKET_TYPE fd, int poll_events,
                                   int (*handler)(int, FdEventHandlerPtr),
                                   int dsize, void *data);
 FdEventHandlerPtr registerFdEventHelper(FdEventHandlerPtr event);
 void unregisterFdEvent(FdEventHandlerPtr event);
-void pokeFdEvent(int fd, int status, int what);
+void pokeFdEvent(SOCKET_TYPE fd, int status, int what);
 int workToDo(void);
 void eventLoop(void);
 ConditionPtr makeCondition(void);

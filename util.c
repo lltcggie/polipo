@@ -487,7 +487,7 @@ expandTilde(AtomPtr filename)
     if(home == NULL) {
         return NULL;
     }
-    len = strlen(home);
+    len = (int)strlen(home);
     buf = malloc(len + 1 + 1 + filename->length - 2);
     if(buf == NULL) {
         do_log(L_ERROR, "Could not allocate buffer.\n");

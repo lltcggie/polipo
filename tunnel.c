@@ -25,7 +25,7 @@ THE SOFTWARE.
 #ifdef NO_TUNNEL
 
 void
-do_tunnel(int fd, char *buf, int offset, int len, AtomPtr url)
+do_tunnel(SOCKET_TYPE fd, char *buf, int offset, int len, AtomPtr url)
 {
     int n;
     assert(buf);
@@ -49,14 +49,14 @@ do_tunnel(int fd, char *buf, int offset, int len, AtomPtr url)
 #else
 
 static void tunnelDispatch(TunnelPtr);
-static int tunnelRead1Handler(int, FdEventHandlerPtr, StreamRequestPtr);
-static int tunnelRead2Handler(int, FdEventHandlerPtr, StreamRequestPtr);
-static int tunnelWrite1Handler(int, FdEventHandlerPtr, StreamRequestPtr);
-static int tunnelWrite2Handler(int, FdEventHandlerPtr, StreamRequestPtr);
-static int tunnelDnsHandler(int, GethostbynameRequestPtr);
-static int tunnelConnectionHandler(int, FdEventHandlerPtr, ConnectRequestPtr);
-static int tunnelSocksHandler(int, SocksRequestPtr);
-static int tunnelHandlerCommon(int, TunnelPtr);
+static int tunnelRead1Handler(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr);
+static int tunnelRead2Handler(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr);
+static int tunnelWrite1Handler(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr);
+static int tunnelWrite2Handler(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr);
+static int tunnelDnsHandler(SOCKET_TYPE, int, GethostbynameRequestPtr);
+static int tunnelConnectionHandler(SOCKET_TYPE, int, FdEventHandlerPtr, ConnectRequestPtr);
+static int tunnelSocksHandler(SOCKET_TYPE, int, SocksRequestPtr);
+static int tunnelHandlerCommon(SOCKET_TYPE, TunnelPtr);
 static int tunnelError(TunnelPtr, int, AtomPtr);
 
 static int
@@ -83,7 +83,7 @@ logTunnel(TunnelPtr tunnel, int blocked)
 }
 
 static TunnelPtr
-makeTunnel(int fd, char *buf, int offset, int len)
+makeTunnel(SOCKET_TYPE fd, char *buf, int offset, int len)
 {
     TunnelPtr tunnel;
     assert(offset < CHUNK_SIZE);
@@ -96,7 +96,7 @@ makeTunnel(int fd, char *buf, int offset, int len)
     tunnel->port = -1;
     tunnel->flags = 0;
     tunnel->fd1 = fd;
-    tunnel->fd2 = -1;
+    tunnel->fd2 = SOCK_INVALID_VALUE;
     tunnel->buf1.buf = buf;
     if(offset == len) {
         tunnel->buf1.tail = 0;
@@ -114,7 +114,7 @@ makeTunnel(int fd, char *buf, int offset, int len)
 static void
 destroyTunnel(TunnelPtr tunnel)
 {
-    assert(tunnel->fd1 < 0 && tunnel->fd2 < 0);
+    assert(IS_SOCK_INVALID(tunnel->fd1) && IS_SOCK_INVALID(tunnel->fd2));
     releaseAtom(tunnel->hostname);
     if(tunnel->buf1.buf)
         dispose_chunk(tunnel->buf1.buf);
@@ -124,7 +124,7 @@ destroyTunnel(TunnelPtr tunnel)
 }
 
 void 
-do_tunnel(int fd, char *buf, int offset, int len, AtomPtr url)
+do_tunnel(SOCKET_TYPE fd, char *buf, int offset, int len, AtomPtr url)
 {
     TunnelPtr tunnel;
     int port;
@@ -195,14 +195,14 @@ do_tunnel(int fd, char *buf, int offset, int len, AtomPtr url)
 }
 
 static int
-tunnelDnsHandler(int status, GethostbynameRequestPtr request)
+tunnelDnsHandler(SOCKET_TYPE fd, int errorno, GethostbynameRequestPtr request)
 {
     TunnelPtr tunnel = request->data;
 
-    if(status <= 0) {
+    if(IS_SOCK_INVALID(fd) || fd == 0) {
         tunnelError(tunnel, 504,
-                    internAtomError(-status, 
-                                    "Host %s lookup failed",
+                    internAtomError(-errorno,
+                                    "errorno %s lookup failed",
                                     atomString(tunnel->hostname)));
         return 1;
     }
@@ -222,15 +222,15 @@ tunnelDnsHandler(int status, GethostbynameRequestPtr request)
 }
 
 static int
-tunnelConnectionHandler(int status,
+tunnelConnectionHandler(SOCKET_TYPE fd, int errorno,
                         FdEventHandlerPtr event,
                         ConnectRequestPtr request)
 {
     TunnelPtr tunnel = request->data;
     int rc;
 
-    if(status < 0) {
-        tunnelError(tunnel, 504, internAtomError(-status, "Couldn't connect"));
+    if(IS_SOCK_INVALID(fd)) {
+        tunnelError(tunnel, 504, internAtomError(-errorno, "Couldn't connect"));
         return 1;
     }
 
@@ -242,12 +242,12 @@ tunnelConnectionHandler(int status,
 }
 
 static int
-tunnelSocksHandler(int status, SocksRequestPtr request)
+tunnelSocksHandler(SOCKET_TYPE fd, int errorno, SocksRequestPtr request)
 {
     TunnelPtr tunnel = request->data;
 
-    if(status < 0) {
-        tunnelError(tunnel, 504, internAtomError(-status, "Couldn't connect"));
+    if(IS_SOCK_INVALID(fd)) {
+        tunnelError(tunnel, 504, internAtomError(-errorno, "Couldn't connect"));
         return 1;
     }
 
@@ -255,7 +255,7 @@ tunnelSocksHandler(int status, SocksRequestPtr request)
 }
 
 static int
-tunnelHandlerParent(int fd, TunnelPtr tunnel)
+tunnelHandlerParent(SOCKET_TYPE fd, TunnelPtr tunnel)
 {
     char *message;
     int n;
@@ -297,7 +297,7 @@ tunnelHandlerParent(int fd, TunnelPtr tunnel)
 }
 
 static int
-tunnelHandlerCommon(int fd, TunnelPtr tunnel)
+tunnelHandlerCommon(SOCKET_TYPE fd, TunnelPtr tunnel)
 {
     const char *message = "HTTP/1.1 200 Tunnel established\r\n\r\n";
 
@@ -314,16 +314,16 @@ tunnelHandlerCommon(int fd, TunnelPtr tunnel)
         return 1;
     }
 
-    memcpy(tunnel->buf2.buf, message, MIN(CHUNK_SIZE - 1, strlen(message)));
-    tunnel->buf2.head = MIN(CHUNK_SIZE - 1, strlen(message));
+    memcpy(tunnel->buf2.buf, message, MIN(CHUNK_SIZE - 1, (int)strlen(message)));
+    tunnel->buf2.head = MIN(CHUNK_SIZE - 1, (int)strlen(message));
 
     tunnelDispatch(tunnel);
     return 1;
 }
 
 static void
-bufRead(int fd, CircularBufferPtr buf,
-        int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+bufRead(SOCKET_TYPE fd, CircularBufferPtr buf,
+        int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
         void *data)
 {
     int tail;
@@ -352,8 +352,8 @@ bufRead(int fd, CircularBufferPtr buf,
 }
 
 static void
-bufWrite(int fd, CircularBufferPtr buf,
-        int (*handler)(int, FdEventHandlerPtr, StreamRequestPtr),
+bufWrite(SOCKET_TYPE fd, CircularBufferPtr buf,
+        int (*handler)(SOCKET_TYPE, int, FdEventHandlerPtr, StreamRequestPtr),
         void *data)
 {
     if(buf->head > buf->tail)
@@ -390,7 +390,7 @@ tunnelDispatch(TunnelPtr tunnel)
         }
     }
 
-    if(tunnel->fd1 >= 0) {
+    if(!IS_SOCK_INVALID(tunnel->fd1)) {
         if(!(tunnel->flags & (TUNNEL_READER1 | TUNNEL_EOF1)) && 
            !circularBufferFull(&tunnel->buf1)) {
             tunnel->flags |= TUNNEL_READER1;
@@ -405,7 +405,7 @@ tunnelDispatch(TunnelPtr tunnel)
             bufWrite(tunnel->fd1, &tunnel->buf2, tunnelWrite1Handler, tunnel);
             return;
         }
-        if(tunnel->fd2 < 0 || (tunnel->flags & TUNNEL_EOF2)) {
+        if(IS_SOCK_INVALID(tunnel->fd2) || (tunnel->flags & TUNNEL_EOF2)) {
             if(!(tunnel->flags & TUNNEL_EPIPE1))
                 shutdown(tunnel->fd1, 1);
             tunnel->flags |= TUNNEL_EPIPE1;
@@ -417,12 +417,12 @@ tunnelDispatch(TunnelPtr tunnel)
         if((tunnel->flags & TUNNEL_EOF1) && (tunnel->flags & TUNNEL_EPIPE1)) {
             if(!(tunnel->flags & (TUNNEL_READER1 | TUNNEL_WRITER1))) {
                 CLOSE(tunnel->fd1);
-                tunnel->fd1 = -1;
+                tunnel->fd1 = SOCK_INVALID_VALUE;
             }
         }
     }
 
-    if(tunnel->fd2 >= 0) {
+    if(!IS_SOCK_INVALID(tunnel->fd2)) {
         if(!(tunnel->flags & (TUNNEL_READER2 | TUNNEL_EOF2)) && 
            !circularBufferFull(&tunnel->buf2)) {
             tunnel->flags |= TUNNEL_READER2;
@@ -434,7 +434,7 @@ tunnelDispatch(TunnelPtr tunnel)
             bufWrite(tunnel->fd2, &tunnel->buf1, tunnelWrite2Handler, tunnel);
             return;
         }
-        if(tunnel->fd1 < 0 || (tunnel->flags & TUNNEL_EOF1)) {
+        if(IS_SOCK_INVALID(tunnel->fd1) || (tunnel->flags & TUNNEL_EOF1)) {
             if(!(tunnel->flags & TUNNEL_EPIPE2))
                 shutdown(tunnel->fd2, 1);
             tunnel->flags |= TUNNEL_EPIPE2;
@@ -446,12 +446,12 @@ tunnelDispatch(TunnelPtr tunnel)
         if((tunnel->flags & TUNNEL_EOF2) && (tunnel->flags & TUNNEL_EPIPE2)) {
             if(!(tunnel->flags & (TUNNEL_READER2 | TUNNEL_WRITER2))) {
                 CLOSE(tunnel->fd2);
-                tunnel->fd2 = -1;
+                tunnel->fd2 = SOCK_INVALID_VALUE;
             }
         }
     }
 
-    if(tunnel->fd1 < 0 && tunnel->fd2 < 0)
+    if(IS_SOCK_INVALID(tunnel->fd1) && IS_SOCK_INVALID(tunnel->fd2))
         destroyTunnel(tunnel);
     else
         assert(tunnel->flags & (TUNNEL_READER1 | TUNNEL_WRITER1 |
@@ -459,13 +459,13 @@ tunnelDispatch(TunnelPtr tunnel)
 }
 
 static int
-tunnelRead1Handler(int status, 
+tunnelRead1Handler(SOCKET_TYPE fd, int errorno,
                    FdEventHandlerPtr event, StreamRequestPtr request)
 {
     TunnelPtr tunnel = request->data;
-    if(status) {
-        if(status < 0 && status != -EPIPE && status != -ECONNRESET)
-            do_log_error(L_ERROR, -status, "Couldn't read from client");
+    if(fd) {
+        if(IS_SOCK_INVALID(fd) && errorno != -EPIPE && errorno != -ECONNRESET)
+            do_log_error(L_ERROR, -errorno, "Couldn't read from client");
         tunnel->flags |= TUNNEL_EOF1;
         goto done;
     }
@@ -480,13 +480,13 @@ tunnelRead1Handler(int status,
 }
 
 static int
-tunnelRead2Handler(int status, 
+tunnelRead2Handler(SOCKET_TYPE fd, int errorno,
                    FdEventHandlerPtr event, StreamRequestPtr request)
 {
     TunnelPtr tunnel = request->data;
-    if(status) {
-        if(status < 0 && status != -EPIPE && status != -ECONNRESET)
-            do_log_error(L_ERROR, -status, "Couldn't read from server");
+    if(fd) {
+        if(IS_SOCK_INVALID(fd) && errorno != -EPIPE && errorno != -ECONNRESET)
+            do_log_error(L_ERROR, -errorno, "Couldn't read from server");
         tunnel->flags |= TUNNEL_EOF2;
         goto done;
     }
@@ -501,14 +501,14 @@ done:
 }
 
 static int
-tunnelWrite1Handler(int status,
+tunnelWrite1Handler(SOCKET_TYPE fd, int errorno,
                    FdEventHandlerPtr event, StreamRequestPtr request)
 {
     TunnelPtr tunnel = request->data;
-    if(status || (tunnel->flags & TUNNEL_EPIPE1)) {
+    if(fd || (tunnel->flags & TUNNEL_EPIPE1)) {
         tunnel->flags |= TUNNEL_EPIPE1;
-        if(status < 0 && status != -EPIPE)
-            do_log_error(L_ERROR, -status, "Couldn't write to client");
+        if(IS_SOCK_INVALID(fd) && errorno != -EPIPE)
+            do_log_error(L_ERROR, -errorno, "Couldn't write to client");
         /* Empty the buffer to avoid a deadlock */
         tunnel->buf2.tail = tunnel->buf2.head;
         goto done;
@@ -521,14 +521,14 @@ tunnelWrite1Handler(int status,
 }
         
 static int
-tunnelWrite2Handler(int status,
+tunnelWrite2Handler(SOCKET_TYPE fd, int errorno,
                    FdEventHandlerPtr event, StreamRequestPtr request)
 {
     TunnelPtr tunnel = request->data;
-    if(status || (tunnel->flags & TUNNEL_EPIPE2)) {
+    if(fd || (tunnel->flags & TUNNEL_EPIPE2)) {
         tunnel->flags |= TUNNEL_EPIPE2;
-        if(status < 0 && status != -EPIPE)
-            do_log_error(L_ERROR, -status, "Couldn't write to server");
+        if(IS_SOCK_INVALID(fd) && errorno != -EPIPE)
+            do_log_error(L_ERROR, -errorno, "Couldn't write to server");
         /* Empty the buffer to avoid a deadlock */
         tunnel->buf1.tail = tunnel->buf1.head;
         goto done;
@@ -544,9 +544,9 @@ static int
 tunnelError(TunnelPtr tunnel, int code, AtomPtr message)
 {
     int n;
-    if(tunnel->fd2 > 0) {
+    if(!IS_SOCK_INVALID(tunnel->fd2)) {
         CLOSE(tunnel->fd2);
-        tunnel->fd2 = -1;
+        tunnel->fd2 = SOCK_INVALID_VALUE;
     }
 
     if(tunnel->buf2.buf == NULL)
@@ -567,7 +567,7 @@ tunnelError(TunnelPtr tunnel, int code, AtomPtr message)
 
  fail:
     CLOSE(tunnel->fd1);
-    tunnel->fd1 = -1;
+    tunnel->fd1 = SOCK_INVALID_VALUE;
     tunnelDispatch(tunnel);
     return 1;
 }

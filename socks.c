@@ -44,7 +44,7 @@ do_socks_connect(char *name, int port,
                  void *data)
 {
     SocksRequestRec request;
-    request.name = internAtomLowerN(name, strlen(name));
+    request.name = internAtomLowerN(name, (int)strlen(name));
     request.port = port;
     request.handler = handler;
     request.buf = NULL;
@@ -193,14 +193,14 @@ do_socks_connect(char *name, int port,
     if(request == NULL)
         goto nomem;
 
-    request->name = internAtomLowerN(name, strlen(name));
+    request->name = internAtomLowerN(name, (int)strlen(name));
     if(request->name == NULL) {
         free(request);
         goto nomem;
     }
 
     request->port = port;
-    request->fd = -1;
+    request->fd = SOCK_INVALID_VALUE;
     request->handler = handler;
     request->buf = NULL;
     request->data = data;
@@ -215,7 +215,7 @@ do_socks_connect(char *name, int port,
     return do_socks_connect_common(request);
 
  nomem:
-    request_nomem.name = internAtomLowerN(name, strlen(name));
+    request_nomem.name = internAtomLowerN(name, (int)strlen(name));
     request_nomem.port = port;
     request_nomem.handler = handler;
     request_nomem.buf = NULL;
@@ -282,7 +282,7 @@ socksConnectHandler(int status,
         return 1;
     }
 
-    assert(request->fd < 0);
+    assert(IS_SOCK_INVALID(request->fd));
     request->fd = crequest->fd;
     socksProxyAddressIndex = crequest->index;
 
@@ -296,7 +296,7 @@ socksConnectHandler(int status,
                               request->name->length + 1);
         if(request->buf == NULL) {
             CLOSE(request->fd);
-            request->fd = -1;
+            request->fd = SOCK_INVALID_VALUE;
             request->handler(-ENOMEM, request);
             destroySocksRequest(request);
             return 1;
@@ -324,7 +324,7 @@ socksConnectHandler(int status,
         request->buf = malloc(8); /* 8 needed for the subsequent read */
         if(request->buf == NULL) {
             CLOSE(request->fd);
-            request->fd = -1;
+            request->fd = SOCK_INVALID_VALUE;
             request->handler(-ENOMEM, request);
             destroySocksRequest(request);
             return 1;
@@ -376,7 +376,7 @@ socksWriteHandler(int status,
 
  error:
     CLOSE(request->fd);
-    request->fd = -1;
+    request->fd = SOCK_INVALID_VALUE;
     request->handler(status, request);
     destroySocksRequest(request);
     return 1;
@@ -414,7 +414,7 @@ socksReadHandler(int status,
 
  error:
     CLOSE(request->fd);
-    request->fd = -1;
+    request->fd = SOCK_INVALID_VALUE;
     request->handler(status, request);
     destroySocksRequest(request);
     return 1;
@@ -451,9 +451,9 @@ socks5ReadHandlerAuth(int status,
     }
 
     request->buf[0] = 1;	/* ver */
-    request->buf[1] = socksUserName->length;	/* username length */
+    request->buf[1] = (char)socksUserName->length;	/* username length */
     memcpy(request->buf + 2, socksUserName->string, socksUserName->length);
-    request->buf[2 + socksUserName->length] = socksPassWord->length;	/* password length */
+    request->buf[2 + socksUserName->length] = (char)socksPassWord->length;	/* password length */
     memcpy(request->buf + 3 + socksUserName->length, socksPassWord->string, socksPassWord->length);
 
     do_stream(IO_WRITE, request->fd, 0,
@@ -463,7 +463,7 @@ socks5ReadHandlerAuth(int status,
 
  error:
     CLOSE(request->fd);
-    request->fd = -1;
+    request->fd = SOCK_INVALID_VALUE;
     request->handler(status, request);
     destroySocksRequest(request);
     return 1;
@@ -507,7 +507,7 @@ socks5ReadHandler(int status,
     request->buf[1] = 1;        /* cmd */
     request->buf[2] = 0;        /* rsv */
     request->buf[3] = 3;        /* atyp */
-    request->buf[4] = request->name->length;
+    request->buf[4] = (char)request->name->length;
     memcpy(request->buf + 5, request->name->string, request->name->length);
     request->buf[5 + request->name->length] = (request->port >> 8) & 0xFF;
     request->buf[5 + request->name->length + 1] = request->port & 0xFF;
@@ -519,7 +519,7 @@ socks5ReadHandler(int status,
 
  error:
     CLOSE(request->fd);
-    request->fd = -1;
+    request->fd = SOCK_INVALID_VALUE;
     request->handler(status, request);
     destroySocksRequest(request);
     return 1;
@@ -596,7 +596,7 @@ socks5ReadHandler2(int status,
 
  error:
     CLOSE(request->fd);
-    request->fd = -1;
+    request->fd = SOCK_INVALID_VALUE;
     request->handler(status, request);
     destroySocksRequest(request);
     return 1;

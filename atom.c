@@ -96,7 +96,7 @@ internAtomN(const char *string, int n)
 AtomPtr
 internAtom(const char *string)
 {
-    return internAtomN(string, strlen(string));
+    return internAtomN(string, (int)strlen(string));
 }
 
 AtomPtr
@@ -105,7 +105,7 @@ atomCat(AtomPtr atom, const char *string)
     char buf[128];
     char *s = buf;
     AtomPtr newAtom;
-    int n = strlen(string);
+    int n = (int)strlen(string);
     if(atom->length + n > 128) {
         s = malloc(atom->length + n + 1);
         if(s == NULL)
@@ -252,7 +252,7 @@ internAtomErrorV(int e, const char *f, va_list args)
         va_end(args_copy);
         if(s1 == NULL)
             return NULL;
-        n = strlen(s1);
+        n = (int)strlen(s1);
     } else {
         s1 = NULL;
         n = 0;

@@ -52,8 +52,8 @@ getcwd_a()
 static char *
 mkfilename(const char *path, char *filename)
 {
-    int n = strlen(path);
-    char *buf = malloc(n + 1 + strlen(filename) + 1);
+    int n = (int)strlen(path);
+    char *buf = malloc(n + 1 + (int)strlen(filename) + 1);
     if(buf == NULL)
         return NULL;
     memcpy(buf, path, n);
@@ -67,7 +67,7 @@ static int
 split(const char *path, int *slash_return, int *dlen, int *blen)
 {
     int len; int slash;
-    len = strlen(path);
+    len = (int)strlen(path);
     while(len > 0 && path[len - 1] == '/')
         len--;
     if(len == 0)

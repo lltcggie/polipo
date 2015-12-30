@@ -65,7 +65,7 @@ typedef struct _HTTPRequest {
 
 typedef struct _HTTPConnection {
     int flags;
-    int fd;
+    SOCKET_TYPE fd;
     char *buf;
     int len;
     int offset;

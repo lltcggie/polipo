@@ -223,7 +223,7 @@ initHttp()
        strcmp(host->h_name, "localhost.localdomain") == 0)
         goto success;
 
-    namelen = strlen(host->h_name);
+    namelen = (int)strlen(host->h_name);
     if(namelen >= CHUNK_SIZE) {
         do_log(L_ERROR, "Host name too long.\n");
         goto success;
@@ -277,7 +277,7 @@ httpTimeoutHandler(TimeEventHandlerPtr event)
 {
     HTTPConnectionPtr connection = *(HTTPConnectionPtr*)event->data;
 
-    if(connection->fd >= 0) {
+    if(!IS_SOCK_INVALID(connection->fd)) {
         int rc;
         rc = shutdown(connection->fd, 2);
         if(rc < 0 && errno != ENOTCONN)
@@ -565,7 +565,7 @@ httpMakeConnection()
     if(connection == NULL)
         return NULL;
     connection->flags = 0;
-    connection->fd = -1;
+    connection->fd = SOCK_INVALID_VALUE;
     connection->buf = NULL;
     connection->len = 0;
     connection->offset = 0;

@@ -182,6 +182,9 @@ THE SOFTWARE.
 #endif
 #define HAVE_READV_WRITEV
 #define HAVE_FFS
+#define SOCKET_TYPE int
+#define IS_SOCK_INVALID(x) ((x) < 0)
+#define SOCK_INVALID_VALUE -1
 #define READ(x, y, z) read(x, y, z)
 #define WRITE(x, y, z) write(x, y, z)
 #define CLOSE(x) close(x)
