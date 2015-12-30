@@ -98,7 +98,11 @@ openLogFile(void)
         return NULL;
     }
 
-    setvbuf(f, NULL, _IOLBF, 0);
+#ifndef _MSC_VER
+	setvbuf(f, NULL, _IOLBF, 0);
+#else
+	setvbuf(f, NULL, _IOLBF, 2);
+#endif
     return f;
 }
 

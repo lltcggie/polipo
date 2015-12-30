@@ -22,6 +22,10 @@ THE SOFTWARE.
 
 #include "polipo.h"
 
+#if defined(_MSC_VER) && !defined(F_OK)
+#define F_OK 0x00
+#endif
+
 AtomPtr configFile = NULL;
 AtomPtr pidFile = NULL;
 int daemonise = 0;
@@ -114,6 +118,17 @@ main(int argc, char **argv)
             configFile = NULL;
         }
     }
+
+	if (configFile == NULL)
+	{
+		configFile = expandTilde(internAtom("polipo_config"));
+		if (configFile)
+			if (access(configFile->string, F_OK) < 0)
+			{
+				releaseAtom(configFile);
+				configFile = NULL;
+			}
+	}
 
     rc = parseConfigFile(configFile);
     if(rc < 0)
