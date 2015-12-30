@@ -2101,7 +2101,11 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
             "\"http://www.w3.org/TR/html4/loose.dtd\">\n"
             "<html><head>\n"
             "<title>%s%s%s</title>\n"
+            "<script type=\"text/javascript\" src=\"//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js\"></script>\n"
+            "<script type=\"text/javascript\" src=\"//cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.25.0/js/jquery.tablesorter.min.js\"></script>\n"
+            "<link rel=\"stylesheet\" type=\"text/css\" href=\"//cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.25.0/css/theme.default.min.css\" />\n"
             "</head><body>\n"
+            "<script type=\"text/javascript\">$(document).ready(function() { $(\"#diskcachelist\").tablesorter({widgets: ['blue']}); } );</script>\n"
             "<h1>%s%s%s</h1>\n",
             recursive ? "Recursive index" : "Index", of, root,
             recursive ? "Recursive index" : "Index", of, root);
@@ -2175,7 +2179,14 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
         dobjects = filterDiskObjects(dobjects, root, recursive);
         buf[0] = '\0';
         alternatingHttpStyle(out, "diskcachelist");
-        fprintf(out, "<table id=diskcachelist>\n");
+		fprintf(out, "<table id=diskcachelist class=\"tablesorter\">\n");
+		fprintf(out, "<thead><tr>\n");
+		fprintf(out, "<th>%s</th>\n", "location");
+		fprintf(out, "<th>%s</th>\n", "size");
+		fprintf(out, "<th>%s</th>\n", "last_modified");
+		fprintf(out, "<th>%s</th>\n", "date");
+		fprintf(out, "<th>%s</th>\n", "access");
+		fprintf(out, "</tr></thead>\n");
         fprintf(out, "<tbody>\n");
         entryno = 0;
         while(dobjects) {
@@ -2203,11 +2214,11 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
                     fprintf(out, "<td>%d/<em>??" "?</em></td> ", dobject->size);
                 }
                 if(dobject->last_modified >= 0) {
-                    struct tm *tm = gmtime(&dobject->last_modified);
+                    struct tm *tm = localtime(&dobject->last_modified);
                     if(tm == NULL)
                         n = -1;
                     else
-                        n = strftime(buf, 1024, "%d.%m.%Y", tm);
+                        n = strftime(buf, 1024, "%d-%m-%Y %H:%M:%S", tm);
                 } else
                     n = -1;
                 if(n > 0) {
@@ -2218,11 +2229,11 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
                 }
                 
                 if(dobject->date >= 0) {
-                    struct tm *tm = gmtime(&dobject->date);
+                    struct tm *tm = localtime(&dobject->date);
                     if(tm == NULL)
                         n = -1;
                     else
-                        n = strftime(buf, 1024, "%d.%m.%Y", tm);
+                        n = strftime(buf, 1024, "%d-%m-%Y %H:%M:%S", tm);
                 } else
                     n = -1;
                 if(n > 0) {
@@ -2231,11 +2242,31 @@ indexDiskObjects(FILE *out, const char *root, int recursive)
                 } else {
                     fprintf(out, "<td></td>");
                 }
+
+				if (dobject->access >= 0)
+				{
+					struct tm *tm = localtime(&dobject->access);
+					if (tm == NULL)
+						n = -1;
+					else
+						n = strftime(buf, 1024, "%d-%m-%Y %H:%M:%S", tm);
+				}
+				else
+					n = -1;
+				if (n > 0)
+				{
+					buf[n] = '\0';
+					fprintf(out, "<td>%s</td>", buf);
+				}
+				else
+				{
+					fprintf(out, "<td></td>");
+				}
             } else {
                 fprintf(out, "<td><tt>");
                 htmlPrint(out, dobject->location,
                           strlen(dobject->location));
-                fprintf(out, "</tt></td><td></td><td></td><td></td>");
+                fprintf(out, "</tt></td><td></td><td></td><td></td><td></td>");
             }
             if(isdir) {
                 fprintf(out, "<td><a href=\"/polipo/index?%s\">plain</a></td>"
