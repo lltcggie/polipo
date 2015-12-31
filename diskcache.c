@@ -1324,26 +1324,17 @@ rewriteEntry(ObjectPtr object)
     int buf_is_chunk, bufsize;
     int offset;
 
-    fd = dup(object->disk_entry->fd);
-    if(fd < 0) {
-        do_log_error(L_ERROR, errno, "Couldn't duplicate file descriptor");
-        return -1;
-    }
-
     rc = destroyDiskEntry(object, 1);
     if(rc < 0) {
-        close(fd);
         return -1;
     }
     entry = makeDiskEntry(object, 1);
     if(!entry) {
-        close(fd);
         return -1;
     }
 
     offset = diskEntrySize(object);
     if(offset < 0) {
-        close(fd);
         return -1;
     }
 
@@ -1356,10 +1347,15 @@ rewriteEntry(ObjectPtr object)
         buf = malloc(2048);
         if(buf == NULL) {
             do_log(L_ERROR, "Couldn't allocate buffer.\n");
-            close(fd);
             return -1;
         }
     }
+
+	fd = dup(object->disk_entry->fd);
+	if (fd < 0) {
+		do_log_error(L_ERROR, errno, "Couldn't duplicate file descriptor");
+		return -1;
+	}
 
     rc = lseek(fd, old_body_offset + offset, SEEK_SET);
     if(rc < 0)
@@ -1426,6 +1422,14 @@ destroyDiskEntry(ObjectPtr object, int d)
     if(d) {
         entry->object->flags &= ~OBJECT_DISK_ENTRY_COMPLETE;
         if(entry->filename) {
+			do {
+				rc = close(entry->fd);
+				if (rc < 0 && errno == EINTR)
+					continue;
+
+				entry->fd = -1;
+			} while (0);
+
             urc = unlink(entry->filename);
             if(urc < 0)
                 do_log_error(L_WARN, errno, 
@@ -1446,11 +1450,12 @@ destroyDiskEntry(ObjectPtr object, int d)
                 return 0;
         }
     }
+    if(entry->fd >= 0) {
  again:
-    rc = close(entry->fd);
-    if(rc < 0 && errno == EINTR)
-        goto again;
-
+        rc = close(entry->fd);
+        if(rc < 0 && errno == EINTR)
+            goto again;
+    }
     entry->fd = -1;
 
     if(entry->filename)
