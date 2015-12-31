@@ -24,8 +24,17 @@ THE SOFTWARE.
 
 #ifndef NO_FORBIDDEN
 
+#ifdef USE_ONIGMO
+#define ONIG_EXTERN   extern
+#include "Onigmo/onigposix.h"
+#else
 #include <regex.h>
+#endif
 #include <assert.h>
+
+#if defined(_MSC_VER) && !defined(F_OK)
+#define F_OK 0x00
+#endif
 
 typedef struct _Domain {
     int length;

@@ -175,6 +175,11 @@ THE SOFTWARE.
 #define UNALIGNED_ACCESS
 #endif
 
+#ifdef WIN32
+#define USE_ONIGMO
+#define HAVE_REGEX
+#endif
+
 #ifndef WIN32 /*MINGW*/
 #define HAVE_FORK
 #ifndef NO_SYSLOG
