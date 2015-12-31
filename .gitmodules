@@ -1,0 +1,3 @@
+[submodule "Onigmo"]
+	path = Onigmo
+	url = https://github.com/lltcggie/Onigmo.git
