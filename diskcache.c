@@ -1313,6 +1313,105 @@ makeDiskEntry(ObjectPtr object, int create)
     return entry;
 }
 
+static int
+destroyDiskEntryRename(ObjectPtr object, const char *rname)
+{
+	int d = 1;
+
+	DiskCacheEntryPtr entry = object->disk_entry;
+	int rc, urc = 1;
+
+	assert(!entry || !entry->local || !d);
+
+	if (d && !entry)
+		entry = makeDiskEntry(object, 0);
+
+	CHECK_ENTRY(entry);
+
+	if (!entry || entry == &negativeEntry)
+	{
+		return 1;
+	}
+
+	assert(entry->object == object);
+
+	if (maxDiskCacheEntrySize >= 0 && object->size > maxDiskCacheEntrySize)
+	{
+		/* See writeoutToDisk */
+		d = 1;
+	}
+
+	if (d)
+	{
+		entry->object->flags &= ~OBJECT_DISK_ENTRY_COMPLETE;
+		if (entry->filename)
+		{
+			do
+			{
+				rc = close(entry->fd);
+				if (rc < 0 && errno == EINTR)
+					continue;
+
+				entry->fd = -1;
+			}
+			while (0);
+
+			urc = rename(entry->filename, rname);
+			if (urc < 0)
+				do_log_error(L_WARN, errno,
+					"Couldn't rename %s to %s", scrub(entry->filename), scrub(rname));
+		}
+	}
+	else
+	{
+		if (entry && entry->metadataDirty)
+			writeoutMetadata(object);
+		makeDiskEntry(object, 0);
+		/* rewriteDiskEntry may change the disk entry */
+		entry = object->disk_entry;
+		if (entry == NULL || entry == &negativeEntry)
+			return 0;
+		if (diskCacheWriteoutOnClose > 0)
+		{
+			reallyWriteoutToDisk(object, -1, diskCacheWriteoutOnClose);
+			entry = object->disk_entry;
+			if (entry == NULL || entry == &negativeEntry)
+				return 0;
+		}
+	}
+	if (entry->fd >= 0)
+	{
+again:
+		rc = close(entry->fd);
+		if (rc < 0 && errno == EINTR)
+			goto again;
+	}
+	entry->fd = -1;
+
+	if (entry->filename)
+		free(entry->filename);
+	entry->filename = NULL;
+
+	if (entry->previous)
+		entry->previous->next = entry->next;
+	else
+		diskEntries = entry->next;
+	if (entry->next)
+		entry->next->previous = entry->previous;
+	else
+		diskEntriesLast = entry->previous;
+
+	numDiskEntries--;
+	assert(numDiskEntries >= 0);
+
+	free(entry);
+	object->disk_entry = NULL;
+	if (urc < 0)
+		return -1;
+	else
+		return 1;
+}
+
 /* Rewrite a disk cache entry, used when the body offset needs to change. */
 static int
 rewriteEntry(ObjectPtr object)
@@ -1323,19 +1422,42 @@ rewriteEntry(ObjectPtr object)
     char* buf;
     int buf_is_chunk, bufsize;
     int offset;
+	char* rname = NULL;
+	int rname_len;
+	int ret = 1;
 
-    rc = destroyDiskEntry(object, 1);
+	if (object->disk_entry && object->disk_entry->filename)
+	{
+		rname_len = strlen(object->disk_entry->filename);
+		rname = malloc(rname_len + 4 + 1);
+		if (rname == NULL)
+		{
+			do_log(L_ERROR, "Couldn't allocate buffer.\n");
+			ret = -1;
+			goto rremove;
+		}
+
+		strcpy(rname, object->disk_entry->filename);
+		strcat(rname, ".old");
+
+		unlink(rname);
+	}
+
+    rc = destroyDiskEntryRename(object, rname);
     if(rc < 0) {
-        return -1;
+		ret = -1;
+		goto rremove;
     }
     entry = makeDiskEntry(object, 1);
     if(!entry) {
-        return -1;
+		ret = -1;
+		goto rremove;
     }
 
     offset = diskEntrySize(object);
     if(offset < 0) {
-        return -1;
+		ret = -1;
+		goto rremove;
     }
 
     bufsize = CHUNK_SIZE;
@@ -1347,14 +1469,16 @@ rewriteEntry(ObjectPtr object)
         buf = malloc(2048);
         if(buf == NULL) {
             do_log(L_ERROR, "Couldn't allocate buffer.\n");
-            return -1;
+			ret = -1;
+			goto rremove;
         }
     }
 
-	fd = dup(object->disk_entry->fd);
+	fd = open(rname, O_RDONLY | O_BINARY);
 	if (fd < 0) {
 		do_log_error(L_ERROR, errno, "Couldn't duplicate file descriptor");
-		return -1;
+		ret = -1;
+		goto rremove;
 	}
 
     rc = lseek(fd, old_body_offset + offset, SEEK_SET);
@@ -1392,7 +1516,17 @@ rewriteEntry(ObjectPtr object)
         dispose_chunk(buf);
     else
         free(buf);
-    return 1;
+
+rremove:
+	if (rname)
+	{
+		rc = unlink(rname);
+		if(rc < 0)
+			do_log_error(L_ERROR, errno, "Couldn't delete rename file");
+		free(rname);
+	}
+
+    return ret;
 }
             
 int
