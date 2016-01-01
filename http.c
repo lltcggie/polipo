@@ -1050,7 +1050,7 @@ httpTweakCachability(ObjectPtr object)
     }
 
     if(urlIsUncachable(object->key, object->key_size)) {
-        object->cache_control |= CACHE_NO_HIDDEN;
+        object->cache_control |= CACHE_NO_STORE;
     }
 
     if((object->cache_control & CACHE_NO_STORE) != 0) {
